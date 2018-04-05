@@ -92,6 +92,10 @@ invGaliosConv = [
 ["67","4A","ED","DE","C5","31","FE","18","0D","63","8C","80","C0","F7","70","07"]
 ]
 
+roundConstant = ["01000000","02000000","04000000","08000000","10000000","20000000","40000000","80000000","1b000000","36000000"]
+
+aesAllKeys=["" for i in range(0,11)]
+
 def subByteConv(state, tableUsedToConvert):
 	newState=[[0 for i in range (0,4)] for j in range(0,4)]
 	for i in range(0,4):
@@ -131,7 +135,6 @@ def getCol(state,i):
 	return [row[i] for row in state]
 
 def mixCol(state,constant):
-	print(state)
 	newState = [[0 for i in range(0,4)] for j in range(0,4)]
 	for i in range(0,4):
 		for j in range(0,4):
@@ -140,28 +143,117 @@ def mixCol(state,constant):
 					constantTemp=hex(constant[i][k])
 					constantTemp=constantTemp[2:]
 					constantTemp=(2-len(constantTemp))*"0"+constantTemp
-					eVal=int(invGaliosConv[int(state[k][j][0],16)][int(state[k][j][1],16)],16) + int(invGaliosConv[int(constantTemp[0],16)][int(constantTemp[1],16)],16)
-					eVal=hex(eVal)
-					eVal=eVal[2:]
-					eVal=(2-len(eVal))*"0"+eVal
-					newState[i][j]^=int(galiosConv[int(eVal[0],16)][int(eVal[1],16)],16)
+					if state[k][j]!="00":
+						eVal=(int(invGaliosConv[int(state[k][j][0],16)][int(state[k][j][1],16)],16) + int(invGaliosConv[int(constantTemp[0],16)][int(constantTemp[1],16)],16))%255
+						eVal=hex(eVal)
+						eVal=eVal[2:]
+						eVal=(2-len(eVal))*"0"+eVal
+						newState[i][j]^=int(galiosConv[int(eVal[0],16)][int(eVal[1],16)],16)
 				else: 
 					newState[i][j]^=int(state[k][j],16)
 	newState=convStateToString(newState)
-	print(newState)
+	return newState
 
-'''state = [
-	["00","12","0c","08"],
-	["04","04","00","23"],
-	["12","12","13","19"],
-	["14","00","11","19"]
-]'''
+def textToState(text):
+	state = [["" for i in range(0,4)] for j in range(0,4)]
+	for i in range(0,16):
+		state[i%4][i//4]=text[i*2:(i+1)*2]
+	return state
 
-state = [
-	["63","eb","9f","a0"],
-	["2f","93","92","c0"],
-	["af","c7","ab","30"],
-	["a2","20","cb","2b"]
-]
+def stateToText(state):
+	text=""
+	for i in range(0,4):
+		for j in range(0,4):
+			text+=state[j][i]
+	return text
 
-mixCol(state,mixColConstant)
+def addRoundKey(state,keyState):
+	for i in range(0,4):
+		for j in range(0,4):
+			temp=(int(state[j][i],16)^int(keyState[j][i],16))
+			temp=hex(temp)
+			temp=temp[2:]
+			temp=(2-len(temp))*"0"+temp
+			state[j][i]=temp
+	return state
+
+
+
+def keyGeneration(inputKey,round):
+	lastWord = inputKey[24:]
+	lastWord = lastWord[2:]+lastWord[:2]#rotatation
+	tWord=""
+	for i in range(0,4):#subByteTransform
+		tWord+=subBytesTable[int(lastWord[i*2],16)][int(lastWord[i*2+1],16)]
+
+	xorWith=hex(int(tWord,16)^int(roundConstant[round-1],16))
+	xorWith=xorWith[2:]
+	xorWith=(8-len(xorWith))*"0"+xorWith
+
+	newKey=""
+	for i in range(0,4):
+		temp=hex(int(xorWith,16)^int(inputKey[8*i:8*(i+1)],16))
+		temp=temp[2:]
+		temp=(8-len(temp))*"0"+temp
+		newKey+=temp
+		xorWith=temp
+	return newKey
+
+def generateAllKeys(key):
+	oldKey=key
+	aesAllKeys[0]=key
+	for i in range(0,10):
+		aesAllKeys[i+1]=keyGeneration(oldKey,i+1)
+		oldKey=aesAllKeys[i+1]
+	return
+
+def aesEncrypt(plainText,key):
+	state=textToState(plainText)
+	keyState=textToState(key)
+	state=addRoundKey(state,keyState)
+	generateAllKeys(key)
+	for i in range(0,10):
+		keyState=textToState(aesAllKeys[i+1])
+		state=subByteConv(state,subBytesTable)
+		state=shiftRows(state,"left")
+		if i!=9:
+			state=mixCol(state,mixColConstant)
+		state=addRoundKey(state,keyState)
+
+	cipherText=stateToText(state)
+	return cipherText
+
+def aesDecrypt(cipherText,key):
+	state=textToState(cipherText)
+	generateAllKeys(key)
+	keyState=textToState(aesAllKeys[10])
+	state=addRoundKey(state,keyState)
+	
+	for i in range(0,10):
+		keyState=textToState(aesAllKeys[9-i])
+		state=shiftRows(state,"right")
+		state=subByteConv(state,invSubBytesTable)
+		state=addRoundKey(state,keyState)
+		if i!=9:
+			state=mixCol(state,invMixColConstant)
+
+	plainText=stateToText(state)
+	return plainText
+
+key = "5468617473206D79204B756E67204675"
+plainText = "54776F204F6E65204E696E652054776F"
+
+cipherText=aesEncrypt(plainText,key)
+print(cipherText)
+plainText=aesDecrypt(cipherText,key)
+print(plainText)
+
+# state=[
+# ["ba","84","e8","1B"],
+# ["75","A4","8D","40"],
+# ["F4","8D","06","7D"],
+# ["7A","32","0E","5D"]
+# ]
+
+# print(mixCol(state,invMixColConstant))
+
