@@ -6,7 +6,12 @@ Implementation of basic information security algorithms...
   <li>AES</li>
   <li>Modes of operation</li>
   <li>Public key Techniques...(RSA)</li>
-  <li>Hash Functions (MD5, SHA)</li>
+  <li>Hash Functions
+    <ul>
+      <li>MD5</li>
+      <li>SHA</li>
+    </ul>
+  </li>
   <li>Side Chanel Attacks</li>
   <li>CAPTCHA</li>
   <li>OTP</li>
