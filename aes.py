@@ -126,8 +126,7 @@ def convStateToDec(state):
 def convStateToString(state):
 	for i in range(0,4):
 		for j in range(0,4):
-			state[i][j]=hex(state[i][j])
-			state[i][j]=state[i][j][2:]
+			state[i][j]=hex(state[i][j]).replace('0x', '')
 			state[i][j]=(2-len(state[i][j]))*"0"+state[i][j]
 	return state	
 
@@ -140,13 +139,11 @@ def mixCol(state,constant):
 		for j in range(0,4):
 			for k in range(0,4):
 				if constant[i][k] !=1 :
-					constantTemp=hex(constant[i][k])
-					constantTemp=constantTemp[2:]
+					constantTemp=hex(constant[i][k]).replace('0x', '')
 					constantTemp=(2-len(constantTemp))*"0"+constantTemp
 					if state[k][j]!="00":
 						eVal=(int(invGaliosConv[int(state[k][j][0],16)][int(state[k][j][1],16)],16) + int(invGaliosConv[int(constantTemp[0],16)][int(constantTemp[1],16)],16))%255
-						eVal=hex(eVal)
-						eVal=eVal[2:]
+						eVal=hex(eVal).replace('0x', '')
 						eVal=(2-len(eVal))*"0"+eVal
 						newState[i][j]^=int(galiosConv[int(eVal[0],16)][int(eVal[1],16)],16)
 				else: 
@@ -171,8 +168,7 @@ def addRoundKey(state,keyState):
 	for i in range(0,4):
 		for j in range(0,4):
 			temp=(int(state[j][i],16)^int(keyState[j][i],16))
-			temp=hex(temp)
-			temp=temp[2:]
+			temp=hex(temp).replace('0x', '')
 			temp=(2-len(temp))*"0"+temp
 			state[j][i]=temp
 	return state
@@ -186,14 +182,12 @@ def keyGeneration(inputKey,round):
 	for i in range(0,4):#subByteTransform
 		tWord+=subBytesTable[int(lastWord[i*2],16)][int(lastWord[i*2+1],16)]
 
-	xorWith=hex(int(tWord,16)^int(roundConstant[round-1],16))
-	xorWith=xorWith[2:]
+	xorWith=hex(int(tWord,16)^int(roundConstant[round-1],16)).replace('0x', '')
 	xorWith=(8-len(xorWith))*"0"+xorWith
 
 	newKey=""
 	for i in range(0,4):
-		temp=hex(int(xorWith,16)^int(inputKey[8*i:8*(i+1)],16))
-		temp=temp[2:]
+		temp=hex(int(xorWith,16)^int(inputKey[8*i:8*(i+1)],16)).replace('0x', '')
 		temp=(8-len(temp))*"0"+temp
 		newKey+=temp
 		xorWith=temp
@@ -208,52 +202,78 @@ def generateAllKeys(key):
 	return
 
 def aesEncrypt(plainText,key):
-	state=textToState(plainText)
-	keyState=textToState(key)
-	state=addRoundKey(state,keyState)
-	generateAllKeys(key)
-	for i in range(0,10):
-		keyState=textToState(aesAllKeys[i+1])
-		state=subByteConv(state,subBytesTable)
-		state=shiftRows(state,"left")
-		if i!=9:
-			state=mixCol(state,mixColConstant)
+	cipherText=""
+	for i in range(0,len(plainText),32):
+		state=textToState(plainText[i:(i+1)*32])
+		keyState=textToState(key)
 		state=addRoundKey(state,keyState)
+		generateAllKeys(key)
+		for i in range(0,10):
+			keyState=textToState(aesAllKeys[i+1])
+			state=subByteConv(state,subBytesTable)
+			state=shiftRows(state,"left")
+			if i!=9:
+				state=mixCol(state,mixColConstant)
+			state=addRoundKey(state,keyState)
 
-	cipherText=stateToText(state)
+		cipherText+=stateToText(state)
 	return cipherText
 
 def aesDecrypt(cipherText,key):
-	state=textToState(cipherText)
-	generateAllKeys(key)
-	keyState=textToState(aesAllKeys[10])
-	state=addRoundKey(state,keyState)
-	
-	for i in range(0,10):
-		keyState=textToState(aesAllKeys[9-i])
-		state=shiftRows(state,"right")
-		state=subByteConv(state,invSubBytesTable)
+	plainText=""
+	for i in range(0,len(cipherText),32):
+		state=textToState(cipherText[i:(i+1)*32])
+		generateAllKeys(key)
+		keyState=textToState(aesAllKeys[10])
 		state=addRoundKey(state,keyState)
-		if i!=9:
-			state=mixCol(state,invMixColConstant)
-
-	plainText=stateToText(state)
+		for i in range(0,10):
+			keyState=textToState(aesAllKeys[9-i])
+			state=shiftRows(state,"right")
+			state=subByteConv(state,invSubBytesTable)
+			state=addRoundKey(state,keyState)
+			if i!=9:
+				state=mixCol(state,invMixColConstant)
+		plainText+=stateToText(state)
 	return plainText
 
-key = "5468617473206D79204B756E67204675"
-plainText = "54776F204F6E65204E696E652054776F"
+def stringToHex(plainString):
+	hexString=""
+	for i in range(0,len(plainString)):
+		temp=hex(ord(plainString[i])).replace('0x','')
+		temp=(2-len(temp))*"0"+temp;
+		hexString+=temp
+	if len(hexString)%32!=0:
+		hexString=(((len(hexString)//32)+1)*32 - len(hexString))*"0"+hexString
+	return hexString
+
+def hexToString(hexString):
+	plainText=""
+	for i in range(0,len(hexString),2):
+		intVal=int(hexString[i:i+2],16)#%95 + 32
+		plainText+=chr(intVal)
+	return plainText
+
+plainText = input("Enter Plain Text : ")
+key = input("Enter Key : ")
+
+plainText=stringToHex(plainText)
+if len(key)>32:
+	key=key[0:32]
+key=stringToHex(key)
 
 cipherText=aesEncrypt(plainText,key)
-print(cipherText)
+print("Cipher Text in hex is :",cipherText)
+print("Cipher Text in ascii character is :",hexToString(cipherText))
+
 plainText=aesDecrypt(cipherText,key)
-print(plainText)
+print("Plain Text in hex is :",plainText)
+print("Plain Text in ascii character is :",hexToString(plainText))
 
-# state=[
-# ["ba","84","e8","1B"],
-# ["75","A4","8D","40"],
-# ["F4","8D","06","7D"],
-# ["7A","32","0E","5D"]
-# ]
+#plain Text : Two One Nine Two #54776F204F6E65204E696E652054776F
+#key : Thats my Kung Fu #5468617473206D79204B756E67204675
+#cipherOutput : <not printable :)> #29C3505F571420F6402299B31A02D73A
 
-# print(mixCol(state,invMixColConstant))
+
+
+
 
