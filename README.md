@@ -5,6 +5,8 @@ Implementation of basic information security algorithms...
   <li>DES</li>
   <li>AES</li>
   <li>Modes of operation</li>
+  <li>Modular Arithmetic </li>
+  <li>Message Authentication Techniques </li>
   <li>Public key Techniques...(RSA)</li>
   <li>Hash Functions (MD5, SHA)</li>
   <li>Side Chanel Attacks</li>
